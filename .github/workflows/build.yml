@@ -44,6 +44,20 @@ on:
         type: string
         default: "Sun Dec 01 08:10:00 UTC 2024"
 
+      # ==================== 自定义内核源码 ====================
+      use_custom_kernel_source:
+        required: false
+        type: boolean
+        default: false
+      custom_kernel_repo:
+        required: false
+        type: string
+        default: ""
+      custom_kernel_branch:
+        required: false
+        type: string
+        default: ""
+
       # ==================== 功能开关 ====================
       use_zram:
         required: false
@@ -962,21 +976,34 @@ jobs:
         run: |
           git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-gnu-6.4.1.git gcc
 
-          FORMATTED_BRANCH="${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.os_patch_level }}"
-          echo "初始化 repo，分支: common-${FORMATTED_BRANCH}"
+          if [ "${{ inputs.use_custom_kernel_source }}" = "true" ] && [ -n "${{ inputs.custom_kernel_repo }}" ]; then
+            echo "使用自定义内核源码: ${{ inputs.custom_kernel_repo }}"
+            CUSTOM_BRANCH="${{ inputs.custom_kernel_branch }}"
+            if [ -z "$CUSTOM_BRANCH" ]; then
+              CUSTOM_BRANCH="android15-6.6"
+            fi
+            git clone "${{ inputs.custom_kernel_repo }}" -b "$CUSTOM_BRANCH" --depth 1 common
+            cd common
+            echo "自定义内核源码克隆完成，当前分支: $CUSTOM_BRANCH"
+            git log -1 --oneline
+            cd ..
+          else
+            FORMATTED_BRANCH="${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.os_patch_level }}"
+            echo "初始化 repo，分支: common-${FORMATTED_BRANCH}"
 
-          $REPO init --depth=1 -u https://android.googlesource.com/kernel/manifest -b common-${FORMATTED_BRANCH} --repo-rev=v2.16
+            $REPO init --depth=1 -u https://android.googlesource.com/kernel/manifest -b common-${FORMATTED_BRANCH} --repo-rev=v2.16
 
-          REMOTE_BRANCH=$(git ls-remote https://android.googlesource.com/kernel/common ${FORMATTED_BRANCH})
-          DEFAULT_MANIFEST_PATH=.repo/manifests/default.xml
+            REMOTE_BRANCH=$(git ls-remote https://android.googlesource.com/kernel/common ${FORMATTED_BRANCH})
+            DEFAULT_MANIFEST_PATH=.repo/manifests/default.xml
 
-          if grep -q deprecated <<< $REMOTE_BRANCH; then
-            echo "检测到已弃用的分支: $FORMATTED_BRANCH"
-            sed -i "s/\"${FORMATTED_BRANCH}\"/\"deprecated\/${FORMATTED_BRANCH}\"/g" $DEFAULT_MANIFEST_PATH
+            if grep -q deprecated <<< $REMOTE_BRANCH; then
+              echo "检测到已弃用的分支: $FORMATTED_BRANCH"
+              sed -i "s/\"${FORMATTED_BRANCH}\"/\"deprecated\/${FORMATTED_BRANCH}\"/g" $DEFAULT_MANIFEST_PATH
+            fi
+
+            $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
+            echo "REMOTE_BRANCH=$REMOTE_BRANCH" >> $GITHUB_ENV
           fi
-
-          $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
-          echo "REMOTE_BRANCH=$REMOTE_BRANCH" >> $GITHUB_ENV
 
       - name: 应用 Stock Config 伪装
         run: |

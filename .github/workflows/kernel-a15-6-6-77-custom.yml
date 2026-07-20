@@ -1,0 +1,211 @@
+name: 内核构建 - Android 15 (6.6.77) 自定义源码
+
+permissions:
+  contents: write
+  actions: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      # ==================== 自定义内核源码 ====================
+      use_custom_kernel_source:
+        description: "使用自定义内核源码"
+        required: true
+        type: boolean
+        default: false
+      custom_kernel_repo:
+        description: "自定义内核源码仓库 (例如: https://github.com/MiCodeX/kernel_xiaomi_sm8250)"
+        required: false
+        type: string
+        default: ""
+      custom_kernel_branch:
+        description: "自定义内核源码分支 (留空则使用 android15-6.6)"
+        required: false
+        type: string
+        default: ""
+
+      # ==================== KernelSU 配置 ====================
+      kernelsu_variant:
+        description: "KernelSU 变体"
+        required: true
+        type: choice
+        options:
+          - None
+          - Official
+          - SukiSU
+          - ReSukiSU
+        default: ReSukiSU
+      kernelsu_branch:
+        description: "KSU 分支"
+        required: true
+        type: choice
+        options:
+          - Stable(标准)
+          - Dev(开发)
+          - Latest(最新)
+          - Custom(自定义)
+        default: Stable(标准)
+      custom_ref:
+        description: "自定义引用 (仅在KSU分支为'Custom(自定义)'时使用)"
+        required: false
+        type: string
+
+      # ==================== 可选配置 ====================
+      version:
+        description: "自定义版本名 (可选)"
+        required: false
+        type: string
+      build_time:
+        description: "自定义构建时间 (可选，N或留空=当前UTC)"
+        required: false
+        type: string
+        default: "Sun Dec 01 08:10:00 UTC 2024"
+      virtualization_support:
+        description: "虚拟化支持"
+        required: false
+        type: choice
+        options:
+          - "off"
+          - "678"
+          - "123"
+          - "345"
+        default: "off"
+
+      # ==================== 功能开关 ====================
+      use_zram:
+        description: "启用 ZRAM 增强算法"
+        required: true
+        type: boolean
+        default: false
+      use_bbg:
+        description: "启用 BBG 防格机"
+        required: true
+        type: boolean
+        default: false
+      use_ddk:
+        description: "启用 DDK 防格机 LSM"
+        required: true
+        type: boolean
+        default: false
+      use_ntsync:
+        description: "启用 NTsync"
+        required: false
+        type: boolean
+        default: false
+      use_networking:
+        description: "启用网络增强（IPSet + BBR）"
+        required: false
+        type: boolean
+        default: false
+      use_kpm:
+        description: "启用 KPM 功能"
+        required: true
+        type: boolean
+        default: false
+      use_rekernel:
+        description: "启用 Re-Kernel 驱动"
+        required: false
+        type: boolean
+        default: false
+      cancel_susfs:
+        description: "禁用 SUSFS"
+        required: true
+        type: boolean
+        default: false
+      supp_op:
+        description: "启用一加 8E 支持"
+        required: false
+        type: boolean
+        default: false
+
+      # ==================== ZRAM 扩展选项 ====================
+      zram_full_algo:
+        description: "启用 ZRAM 完整算法支持（6.12 自动跳过 legacy LZ4K/LZ4KD/LZ4K_OPLUS）"
+        required: false
+        type: boolean
+        default: false
+      zram_extra_algos:
+        description: "自定义 ZRAM 算法（逗号分隔，如 lzo,lz4,deflate,zstd；6.12 会忽略 lz4k/lz4kd/lz4k_oplus）"
+        required: false
+        type: string
+        default: ""
+
+      # ==================== KPM 扩展选项 ====================
+      kpm_password:
+        description: "自定义 KPM 超级密码（留空=使用默认密码）"
+        required: false
+        type: string
+        default: ""
+
+      # ==================== 自定义外部模块 ====================
+      custom_external_modules:
+        description: "自定义外部模块（兼容旧 repo;stage，也支持 module:repo;stage 与 set:repo#child;stage，用 | 分隔）"
+        required: false
+        type: string
+        default: ""
+      custom_kernel_options:
+        description: "自定义内核选项（每行一条 Kconfig/defconfig 片段）"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  build-kernel-a15-6-6-77:
+    name: "6.6.77-2025-03"
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      # ==================== 基础配置 ====================
+      android_version: "android15"
+      kernel_version: "6.6"
+      sub_level: "77"
+      os_patch_level: "2025-03"
+
+      # ==================== KernelSU 配置 ====================
+      ksu_variant: ${{ inputs.kernelsu_variant }}
+      ksu_branch: ${{ inputs.kernelsu_branch }}
+      custom_ref: ${{ inputs.custom_ref || '' }}
+
+      # ==================== 可选配置 ====================
+      version: ${{ inputs.version || '' }}
+      build_time: ${{ inputs.build_time || '' }}
+
+      # ==================== 自定义内核源码 ====================
+      use_custom_kernel_source: ${{ inputs.use_custom_kernel_source }}
+      custom_kernel_repo: ${{ inputs.custom_kernel_repo || '' }}
+      custom_kernel_branch: ${{ inputs.custom_kernel_branch || '' }}
+
+      # ==================== 功能开关 ====================
+      use_zram: ${{ inputs.use_zram }}
+      use_bbg: ${{ inputs.use_bbg }}
+      use_ddk: ${{ inputs.use_ddk }}
+      use_ntsync: ${{ inputs.use_ntsync || false }}
+      use_networking: ${{ inputs.use_networking || false }}
+      use_kpm: ${{ inputs.use_kpm }}
+      use_rekernel: ${{ inputs.use_rekernel || false }}
+      supp_op: ${{ inputs.supp_op || false }}
+      enable_susfs: ${{ !inputs.cancel_susfs }}
+      virtualization_support: ${{ inputs.virtualization_support || 'off' }}
+
+      # ==================== ZRAM 扩展选项 ====================
+      zram_full_algo: ${{ inputs.zram_full_algo || false }}
+      zram_extra_algos: ${{ inputs.zram_extra_algos || '' }}
+
+      # ==================== KPM 扩展选项 ====================
+      kpm_password: ${{ inputs.kpm_password || '' }}
+
+      # ==================== 自定义外部模块 ====================
+      custom_external_modules: ${{ inputs.custom_external_modules || '' }}
+      custom_kernel_options: ${{ inputs.custom_kernel_options || '' }}
+
+      # ==================== 其他配置 ====================
+      upload_aux_artifacts: false
+
+  # 仅在直接触发时运行
+  get-ksu-manager:
+    uses: ./.github/workflows/get-manager.yml
+    secrets: inherit
+    with:
+      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      ksu_branch: ${{ inputs.kernelsu_branch }}
+      custom_ref: ${{ inputs.custom_ref || '' }}
